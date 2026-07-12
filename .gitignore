@@ -1,0 +1,105 @@
+# Binaries and build outputs
+/bin/
+/dist/
+/petitdb
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binaries
+*.test
+*.out
+
+# Go workspace files
+go.work
+go.work.sum
+
+# Dependency files (though we have none, keep it clean)
+vendor/
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment and OS files
+.env
+.env.local
+.env.*.local
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Data directory (this is crucial!)
+/data/
+/snapshot*
+*.tmp
+*.corrupt.*
+
+# Logs
+*.log
+logs/
+
+# Coverage reports
+*.cover
+*.coverprofile
+coverage.out
+coverage.html
+
+# Build tools
+Makefile
+*.mk
+
+# Docker
+*.tar
+*.tar.gz
+
+# Temporary files
+tmp/
+temp/
+*.temp
+
+# Profiling data
+*.prof
+*.cpu
+*.mem
+
+# Debug files
+debug
+__debug_bin
+
+# Go module checksum
+go.sum
+
+# Local development overrides
+.local/
+*.local.yaml
+*.local.yml
+
+# Backup files
+*.bak
+*.backup
+*.old
+
+# Archives
+*.zip
+*.tar.gz
+*.tgz
+*.rar
+*.7z
+
+# Air (hot reload)
+tmp/
+
+# Delve (debugger)
+.debug/
+
+# Task (task runner)
+.task/
+
+context/
