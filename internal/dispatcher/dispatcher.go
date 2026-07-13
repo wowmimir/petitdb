@@ -45,7 +45,7 @@ func (d *Dispatcher) Dispatch(cmd string, args [][]byte) (interface{}, error) {
 			return nil, fmt.Errorf("ERR wrong number of arguments for 'SET' (expected 2, got %d)", len(args))
 		}
 		d.store.Set(string(args[0]), args[1])
-		return "OK", nil
+		return "+OK", nil
 
 	case "GET":
 		if len(args) != 1 {

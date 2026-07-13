@@ -1,75 +1,41 @@
 package main
 
 import (
-    "fmt"
-    "log"
+	"log"
+	"os"
+	"os/signal"
+	"syscall"
 
-    "github.com/wowmimir/petitdb/internal/config"
-    "github.com/wowmimir/petitdb/internal/dispatcher"
-    "github.com/wowmimir/petitdb/internal/storage"
+	"github.com/wowmimir/petitdb/internal/config"
+	"github.com/wowmimir/petitdb/internal/server"
+	"github.com/wowmimir/petitdb/internal/dispatcher"
+	"github.com/wowmimir/petitdb/internal/storage"
 )
 
 func main() {
+	// Parse flags and load config
 	cfg := config.NewConfig()
-	
-	// Verify it works
-	log.Printf("PetitDB starting on %s:%d", cfg.Bind, cfg.Port)
-	log.Printf("Data directory: %s", cfg.Dir)
 
 	store := storage.NewStore()
 
-    // 2. Create the dispatcher with the store
-    disp := dispatcher.NewDispatcher(store)
+	disp := dispatcher.NewDispatcher(store)
 
-    // 3. Test some commands
-    testCommands(disp)
-}
 
-func testCommands(disp *dispatcher.Dispatcher) {
-    // Helper to print results
-    run := func(cmd string, args ...[]byte) {
-        result, err := disp.Dispatch(cmd, args)
-        if err != nil {
-            fmt.Printf("❌ %s %v → Error: %v\n", cmd, argsToString(args), err)
-            return
-        }
-        fmt.Printf("✅ %s %v → %v\n", cmd, argsToString(args), result)
-    }
+	// Create server
+	srv := server.NewServer(cfg,disp)
 
-    // Test SET
-    run("SET", []byte("name"), []byte("PetitDB"))
+	// Start server in a goroutine so we can listen for signals
+	go func() {
+		if err := srv.Start(); err != nil {
+			log.Fatalf("Server error: %v", err)
+		}
+	}()
 
-    // Test GET
-    run("GET", []byte("name"))
+	// Wait for interrupt signal (Ctrl+C)
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+	<-sigCh
 
-    // Test GET on non‑existent key
-    run("GET", []byte("unknown"))
-
-    // Test EXISTS
-    run("EXISTS", []byte("name"))
-
-    // Test DEL
-    run("DEL", []byte("name"))
-
-    // Test EXISTS after delete
-    run("EXISTS", []byte("name"))
-
-    // Test unknown command (should give verbose error)
-    run("HGET", []byte("name"))
-}
-
-// Helper to convert [][]byte to a string representation for logging
-func argsToString(args [][]byte) string {
-    if len(args) == 0 {
-        return "[]"
-    }
-    out := "["
-    for i, arg := range args {
-        if i > 0 {
-            out += " "
-        }
-        out += fmt.Sprintf("%q", string(arg))
-    }
-    out += "]"
-    return out
+	// Graceful shutdown
+	srv.Shutdown()
 }
