@@ -2,10 +2,12 @@ package dispatcher
 
 import (
 	"fmt"
-	"strconv" // NEW: for parsing integers
+	"strconv"
 	"strings"
 
 	apperrors "github.com/wowmimir/petitdb/internal/errors"
+	"github.com/wowmimir/petitdb/internal/protocol/resp"
+	"github.com/wowmimir/petitdb/internal/pubsub"
 	"github.com/wowmimir/petitdb/internal/storage"
 )
 
@@ -15,22 +17,25 @@ var SupportedCommands = []string{
 	"EXPIRE", "TTL", "SAVE", "SUBSCRIBE", "PUBLISH", "INFO",
 }
 
-// Dispatcher routes commands to the storage engine.
+// Dispatcher routes commands to the appropriate subsystem.
 type Dispatcher struct {
-	store *storage.Store
-	saveFunc   func() error // NEW: callback to trigger snapshot save
+	store    *storage.Store
+	pubsub   *pubsub.Broker
+	saveFunc func() error
 }
 
-func NewDispatcher(store *storage.Store, saveFunc func() error) *Dispatcher {
+func NewDispatcher(store *storage.Store, pb *pubsub.Broker, saveFunc func() error) *Dispatcher {
 	return &Dispatcher{
 		store:    store,
+		pubsub:   pb,
 		saveFunc: saveFunc,
 	}
 }
 
 // Dispatch processes a command and returns a result or an error.
-func (d *Dispatcher) Dispatch(cmd string, args [][]byte) (interface{}, error) {
-	// Input validation for the key (if there is at least one argument)
+// The clientCh parameter is used for SUBSCRIBE commands.
+func (d *Dispatcher) Dispatch(cmd string, args [][]byte, clientCh chan []byte) (interface{}, error) {
+	// Input validation for key (if there is at least one argument)
 	if len(args) > 0 {
 		key := string(args[0])
 		if len(key) == 0 {
@@ -41,7 +46,6 @@ func (d *Dispatcher) Dispatch(cmd string, args [][]byte) (interface{}, error) {
 		}
 	}
 
-	// Normalise command to uppercase
 	cmdUpper := strings.ToUpper(cmd)
 
 	switch cmdUpper {
@@ -50,7 +54,7 @@ func (d *Dispatcher) Dispatch(cmd string, args [][]byte) (interface{}, error) {
 			return nil, fmt.Errorf("ERR wrong number of arguments for 'SET' (expected 2, got %d)", len(args))
 		}
 		d.store.Set(string(args[0]), args[1])
-		return "OK", nil // Changed from "+OK" to "OK" – serializer handles it
+		return "OK", nil
 
 	case "GET":
 		if len(args) != 1 {
@@ -76,11 +80,10 @@ func (d *Dispatcher) Dispatch(cmd string, args [][]byte) (interface{}, error) {
 		exists := d.store.Exists(string(args[0]))
 		return exists, nil
 
-	case "EXPIRE": // NEW
+	case "EXPIRE":
 		if len(args) != 2 {
 			return nil, fmt.Errorf("ERR wrong number of arguments for 'EXPIRE' (expected 2, got %d)", len(args))
 		}
-		// Parse seconds
 		seconds, err := strconv.ParseInt(string(args[1]), 10, 64)
 		if err != nil {
 			return nil, fmt.Errorf("ERR value is not an integer or out of range")
@@ -88,20 +91,62 @@ func (d *Dispatcher) Dispatch(cmd string, args [][]byte) (interface{}, error) {
 		ok := d.store.Expire(string(args[0]), seconds)
 		return ok, nil
 
-	case "TTL": // NEW
+	case "TTL":
 		if len(args) != 1 {
 			return nil, fmt.Errorf("ERR wrong number of arguments for 'TTL' (expected 1, got %d)", len(args))
 		}
 		ttl := d.store.TTL(string(args[0]))
 		return ttl, nil
 
-	case "SUBSCRIBE", "PUBLISH":
-		// TODO: Route to pubsub broker (Phase 4)
-		return nil, fmt.Errorf("ERR pubsub commands not yet implemented")
+	case "SUBSCRIBE":
+		if len(args) < 1 {
+			return nil, fmt.Errorf("ERR wrong number of arguments for 'SUBSCRIBE' (expected at least 1)")
+		}
 
-	case "INFO":
-		// TODO: Return runtime info (Phase 5)
-		return nil, fmt.Errorf("ERR INFO command not yet implemented")
+		// Subscribe to each topic and build confirmations
+		confirmations := make([]interface{}, 0, len(args))
+		for _, topicBytes := range args {
+			topic := string(topicBytes)
+			// Validate topic name
+			if len(topic) == 0 {
+				return nil, apperrors.ErrEmptyKey
+			}
+			if len(topic) > 256 {
+				return nil, apperrors.ErrKeyTooLong
+			}
+
+			// Add subscription
+			d.pubsub.Subscribe(topic, clientCh)
+
+			// Get count for this topic after subscribing
+			count := d.pubsub.SubscriberCountForTopic(topic)
+
+			// Create confirmation: ["subscribe", topic, count]
+			confirmations = append(confirmations, []interface{}{
+				"subscribe",
+				topic,
+				count,
+			})
+		}
+
+		return confirmations, nil
+
+	case "PUBLISH":
+		if len(args) != 2 {
+			return nil, fmt.Errorf("ERR wrong number of arguments for 'PUBLISH' (expected 2, got %d)", len(args))
+		}
+
+		topic := string(args[0])
+		message := args[1]
+
+		// Serialize the push message once: ["message", topic, message]
+		pushMessage := []interface{}{"message", topic, message}
+		serialized := resp.SerializeArray(pushMessage)
+
+		// Broadcast to all subscribers
+		count := d.pubsub.Publish(topic, []byte(serialized))
+		return count, nil
+
 	case "SAVE":
 		if len(args) != 0 {
 			return nil, fmt.Errorf("ERR wrong number of arguments for 'SAVE' (expected 0, got %d)", len(args))
@@ -111,8 +156,11 @@ func (d *Dispatcher) Dispatch(cmd string, args [][]byte) (interface{}, error) {
 		}
 		return "OK", nil
 
+	case "INFO":
+		// TODO: Phase 5
+		return nil, fmt.Errorf("ERR INFO command not yet implemented")
+
 	default:
-		// Verbose unknown command error – lists all supported commands
 		return nil, fmt.Errorf(
 			"ERR unknown command '%s'. PetitDB v1 supports: %s",
 			cmd,

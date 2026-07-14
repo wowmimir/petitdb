@@ -13,11 +13,10 @@ func Serialize(v interface{}) string {
 
 	switch val := v.(type) {
 	case string:
-		// Simple string (e.g., "OK")
 		return "+" + val + "\r\n"
 	case int:
 		return ":" + strconv.Itoa(val) + "\r\n"
-	case int64: // NEW: support for int64 (for TTL)
+	case int64:
 		return ":" + strconv.FormatInt(val, 10) + "\r\n"
 	case bool:
 		if val {
@@ -29,10 +28,25 @@ func Serialize(v interface{}) string {
 			return "$-1\r\n"
 		}
 		return fmt.Sprintf("$%d\r\n%s\r\n", len(val), string(val))
+	case []interface{}:
+		return SerializeArray(val)
 	case error:
 		return "-" + val.Error() + "\r\n"
 	default:
 		// Fallback: treat as string
 		return fmt.Sprintf("+%v\r\n", val)
 	}
+}
+
+// SerializeArray converts a slice of values to a RESP array string.
+func SerializeArray(elements []interface{}) string {
+	if elements == nil {
+		return "*-1\r\n"
+	}
+
+	result := fmt.Sprintf("*%d\r\n", len(elements))
+	for _, elem := range elements {
+		result += Serialize(elem)
+	}
+	return result
 }

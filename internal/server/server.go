@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -13,47 +14,26 @@ import (
 	"github.com/wowmimir/petitdb/internal/dispatcher"
 	"github.com/wowmimir/petitdb/internal/persistence"
 	"github.com/wowmimir/petitdb/internal/protocol/resp"
+	"github.com/wowmimir/petitdb/internal/pubsub"
 	"github.com/wowmimir/petitdb/internal/storage"
 )
 
 type Server struct {
-	cfg *config.Config
-
-	listener net.Listener
-
-	wg sync.WaitGroup
-
-	ctx context.Context
-
-	cancel context.CancelFunc
-
+	cfg        *config.Config
+	listener   net.Listener
+	wg         sync.WaitGroup
+	ctx        context.Context
+	cancel     context.CancelFunc
 	dispatcher *dispatcher.Dispatcher
-
-	store *storage.Store
-
-	cleanupWg sync.WaitGroup
-	
-	pm *persistence.SnapshotManager
+	store      *storage.Store
+	cleanupWg  sync.WaitGroup
+	pm         *persistence.SnapshotManager
+	broker     *pubsub.Broker
 }
 
-func NewServer(cfg *config.Config, disp *dispatcher.Dispatcher, store *storage.Store) *Server {
-
+func NewServer(cfg *config.Config, disp *dispatcher.Dispatcher, store *storage.Store, broker *pubsub.Broker) *Server {
 	ctx, cancel := context.WithCancel(context.Background())
-
 	pm := persistence.NewSnapshotManager(cfg.Dir)
-
-	loadedStore, wasLoaded, err := pm.Load()
-
-	if err != nil {
-		// This should not happen because Load handles corruption and never returns error
-		// But just in case, log and continue
-		log.Printf("Warning: unexpected error loading snapshot: %v", err)
-	}
-
-	// If we loaded a store from snapshot, we should use it instead of the empty one
-	if wasLoaded {
-		store = loadedStore
-	}
 
 	return &Server{
 		cfg:        cfg,
@@ -61,37 +41,34 @@ func NewServer(cfg *config.Config, disp *dispatcher.Dispatcher, store *storage.S
 		cancel:     cancel,
 		dispatcher: disp,
 		store:      store,
-		pm:         pm, // NEW: store persistence manager
+		pm:         pm,
+		broker:     broker,
 	}
 }
 
 func (s *Server) Start() error {
-
 	addr := fmt.Sprintf("%s:%d", s.cfg.Bind, s.cfg.Port)
-
 	listener, err := net.Listen("tcp", addr)
-
 	if err != nil {
 		return fmt.Errorf("failed to bind to %s: %w", addr, err)
 	}
-
 	s.listener = listener
 
 	log.Printf("PetitDB listening on %s", addr)
 	log.Printf("Data directory: %s", s.cfg.Dir)
 
+	// Start cleanup loop
 	s.cleanupWg.Add(1)
 	go s.cleanupLoop()
 
+	// Accept connections
 	for {
 		conn, err := s.listener.Accept()
-
 		if err != nil {
 			select {
 			case <-s.ctx.Done():
 				log.Println("Stopping accept loop (shutdown)")
 				return nil
-
 			default:
 				log.Printf("Accept error: %v", err)
 				continue
@@ -106,7 +83,7 @@ func (s *Server) Start() error {
 func (s *Server) cleanupLoop() {
 	defer s.cleanupWg.Done()
 
-	ticker := time.NewTicker(1 * time.Second) // Cleanup every second
+	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
 	log.Println("Expiration cleanup started (interval: 1s)")
@@ -129,49 +106,99 @@ func (s *Server) handleConn(conn net.Conn) {
 	defer s.wg.Done()
 	defer conn.Close()
 
-	log.Printf("Client connected: %s", conn.RemoteAddr())
+	addr := conn.RemoteAddr()
+	log.Printf("Client connected: %s", addr)
+	defer log.Printf("Client disconnected: %s", addr)
 
-	defer log.Printf("Client disconnected: %s", conn.RemoteAddr()) // <-- new
-	
+	// Create the subscriber channel for this client
+	// Buffer size: 64 messages (enough to absorb bursts)
+	pubsubCh := make(chan []byte, 64)
+	defer func() {
+		// Clean up: unsubscribe from all topics and close channel
+		s.broker.UnsubscribeAll(pubsubCh)
+		close(pubsubCh)
+	}()
+
 	reader := bufio.NewReader(conn)
+	isSubscriber := false
 
 	for {
 		select {
 		case <-s.ctx.Done():
-			log.Printf("Shutting down client %s", conn.RemoteAddr())
+			log.Printf("Shutting down client %s", addr)
 			return
 		default:
 		}
 
-		conn.SetReadDeadline(time.Now().Add(1 * time.Second))
+		// If we're in subscriber mode, we don't read commands anymore
+		if isSubscriber {
+			s.handleSubscriberMode(conn, pubsubCh, addr)
+			return
+		}
 
-		// Parse command from the stream
+		// Read command with timeout
+		conn.SetReadDeadline(time.Now().Add(1 * time.Second))
 		cmd, args, err := resp.ParseCommand(reader)
 		if err != nil {
-			// If it's a timeout error, continue
 			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 				continue
 			}
-			// Real error: send error back and close
-			log.Printf("Parse error from %s: %v", conn.RemoteAddr(), err)
+			log.Printf("Parse error from %s: %v", addr, err)
 			conn.Write([]byte(resp.Serialize(err)))
 			return
 		}
 
-		// Dispatch the command
-		result, err := s.dispatcher.Dispatch(cmd, args)
+		// Dispatch command with the client's subscriber channel
+		result, err := s.dispatcher.Dispatch(cmd, args, pubsubCh)
 		if err != nil {
-			// Send error response
 			conn.Write([]byte(resp.Serialize(err)))
-		} else {
-			// Send success response
-			conn.Write([]byte(resp.Serialize(result)))
+			continue
+		}
+
+		// Check if this was a SUBSCRIBE command
+		if strings.ToUpper(cmd) == "SUBSCRIBE" {
+			// Send subscription confirmations
+			// result should be []interface{} of confirmations
+			if confirmations, ok := result.([]interface{}); ok {
+				for _, confirm := range confirmations {
+					conn.Write([]byte(resp.Serialize(confirm)))
+				}
+			}
+			// Enter subscriber mode
+			isSubscriber = true
+			// Continue to subscriber loop (without blocking the main read loop)
+			s.handleSubscriberMode(conn, pubsubCh, addr)
+			return
+		}
+
+		// Normal response for non-SUBSCRIBE commands
+		conn.Write([]byte(resp.Serialize(result)))
+	}
+}
+
+// handleSubscriberMode forwards pub/sub messages to the client.
+// This is a separate function to keep the main loop clean.
+func (s *Server) handleSubscriberMode(conn net.Conn, pubsubCh chan []byte, addr net.Addr) {
+	for {
+		select {
+		case <-s.ctx.Done():
+			log.Printf("Shutting down subscriber %s", addr)
+			return
+		case msg, ok := <-pubsubCh:
+			if !ok {
+				// Channel closed
+				return
+			}
+			// Write message to client
+			if _, err := conn.Write(msg); err != nil {
+				log.Printf("Write error to subscriber %s: %v", addr, err)
+				return
+			}
 		}
 	}
 }
 
 func (s *Server) Shutdown() {
-
 	log.Println("Shutting down server...")
 
 	s.cancel()
