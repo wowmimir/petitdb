@@ -470,12 +470,11 @@ No – PetitDB is a minimalist TCP server.
 
 ## Documentation
 
-- [Installation](./INSTALL.md)
-- [Deployment](./DEPLOYMENT.md)
-- [Commands](./COMMANDS.md)
-- [Architecture](./ARCHITECTURE.md)
-- [Changelog](./CHANGELOG.md)
-- [Operations Handbook](./OPS.md) – for maintainers
+- [Installation](./docs/INSTALL.md)
+- [Deployment](./docs/DEPLOYMENT.md)
+- [Commands](./docs/COMMANDS.md)
+- [Architecture](./docs/ARCHITECTURE.md)
+- [Changelog](./docs/CHANGELOG.md)
 
 ---
 
