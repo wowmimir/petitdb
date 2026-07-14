@@ -22,6 +22,7 @@ PetitDB is a simple TCP state server for session storage, API caching, counters,
 
 - [Quick Start (30 seconds)](#quick-start-30-seconds)
 - [Installation](#installation)
+- [Docker](#docker)
 - [Configuration](#configuration)
 - [Built‑in CLI](#builtin-cli)
 - [Supported Commands](#supported-commands)
@@ -89,14 +90,6 @@ Invoke-WebRequest -Uri https://github.com/wowmimir/petitdb/releases/latest/downl
 .\petitdb.exe
 ```
 
-### Docker
-```bash
-docker pull wowmimir/petitdb:latest
-docker run -p 9379:9379 -v petitdb_data:/data wowmimir/petitdb:latest
-```
-
-The Docker image supports both `linux/amd64` and `linux/arm64` architectures.
-
 ### From source
 ```bash
 git clone https://github.com/wowmimir/petitdb.git
@@ -107,6 +100,111 @@ make build
 
 # Using PowerShell (Windows)
 .\build.ps1 build
+```
+
+---
+
+## Docker
+
+### Quick Start
+
+```bash
+docker pull wowmimir/petitdb:latest
+docker run -p 9379:9379 -v petitdb_data:/data wowmimir/petitdb:latest
+```
+
+### Customizing the Container
+
+You can override any of the default flags by appending them to the `docker run` command:
+
+```bash
+# Custom port (container listens on 9380)
+docker run -p 9380:9380 -v petitdb_data:/data wowmimir/petitdb:latest --port 9380
+
+# Custom data directory (mount your own path)
+docker run -p 9379:9379 -v /my/custom/path:/data wowmimir/petitdb:latest --dir /data
+
+# Bind to localhost only (for security)
+docker run -p 127.0.0.1:9379:9379 -v petitdb_data:/data wowmimir/petitdb:latest --bind 127.0.0.1
+
+# Combine multiple customizations
+docker run -d \
+  --name petitdb \
+  -p 9380:9380 \
+  -v /home/user/petitdb_data:/data \
+  wowmimir/petitdb:latest \
+  --port 9380 \
+  --bind 0.0.0.0 \
+  --dir /data
+```
+
+### Understanding Port Mapping
+
+| Setting | Meaning |
+|---------|---------|
+| `-p 9380:9379` | Host listens on port 9380, container listens on 9379 |
+| `--port 9380` | Container listens on port 9380 (override default) |
+
+If you change the container's internal port with `--port`, you must also update the port mapping:
+
+```bash
+# Container listens on 9380 → map host 9380 to container 9380
+docker run -p 9380:9380 -v petitdb_data:/data wowmimir/petitdb:latest --port 9380
+```
+
+### Persisting Data
+
+PetitDB stores snapshots in the directory specified by `--dir` (default: `/data`). To persist data across container restarts:
+
+```bash
+# Using a named volume
+docker run -p 9379:9379 -v petitdb_data:/data wowmimir/petitdb:latest
+
+# Using a host directory
+docker run -p 9379:9379 -v /absolute/path/on/host:/data wowmimir/petitdb:latest
+
+# Using a relative path (PowerShell/Unix)
+docker run -p 9379:9379 -v $(pwd)/data:/data wowmimir/petitdb:latest
+```
+
+### Multi-Architecture Support
+
+The Docker image supports both `linux/amd64` and `linux/arm64` architectures. Docker automatically selects the correct version for your system.
+
+### Production Deployment with Docker Compose
+
+Create `docker-compose.yml`:
+
+```yaml
+services:
+  petitdb:
+    image: wowmimir/petitdb:latest
+    container_name: petitdb
+    ports:
+      - "9379:9379"
+    volumes:
+      - ./petitdb-data:/data
+    restart: unless-stopped
+    command: ["--bind", "0.0.0.0", "--dir", "/data"]
+```
+
+Start with:
+
+```bash
+docker-compose up -d
+```
+
+### Verify the Container
+
+```bash
+# Check logs
+docker logs petitdb
+
+# Test connection
+redis-cli -p 9379 PING
+
+# Check data directory
+docker exec petitdb ls -la /data
 ```
 
 ---
@@ -377,6 +475,7 @@ No – PetitDB is a minimalist TCP server.
 - [Commands](./COMMANDS.md)
 - [Architecture](./ARCHITECTURE.md)
 - [Changelog](./CHANGELOG.md)
+- [Operations Handbook](./OPS.md) – for maintainers
 
 ---
 
