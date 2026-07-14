@@ -22,7 +22,7 @@ func main() {
 
 
 	// Create server
-	srv := server.NewServer(cfg,disp)
+	srv := server.NewServer(cfg,disp,store)
 
 	// Start server in a goroutine so we can listen for signals
 	go func() {

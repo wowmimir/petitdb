@@ -17,6 +17,8 @@ func Serialize(v interface{}) string {
 		return "+" + val + "\r\n"
 	case int:
 		return ":" + strconv.Itoa(val) + "\r\n"
+	case int64: // NEW: support for int64 (for TTL)
+		return ":" + strconv.FormatInt(val, 10) + "\r\n"
 	case bool:
 		if val {
 			return ":1\r\n"

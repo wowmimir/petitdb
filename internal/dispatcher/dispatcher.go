@@ -2,6 +2,7 @@ package dispatcher
 
 import (
 	"fmt"
+	"strconv" // NEW: for parsing integers
 	"strings"
 
 	apperrors "github.com/wowmimir/petitdb/internal/errors"
@@ -45,7 +46,7 @@ func (d *Dispatcher) Dispatch(cmd string, args [][]byte) (interface{}, error) {
 			return nil, fmt.Errorf("ERR wrong number of arguments for 'SET' (expected 2, got %d)", len(args))
 		}
 		d.store.Set(string(args[0]), args[1])
-		return "+OK", nil
+		return "OK", nil // Changed from "+OK" to "OK" – serializer handles it
 
 	case "GET":
 		if len(args) != 1 {
@@ -71,10 +72,32 @@ func (d *Dispatcher) Dispatch(cmd string, args [][]byte) (interface{}, error) {
 		exists := d.store.Exists(string(args[0]))
 		return exists, nil
 
-	// We'll add EXPIRE, TTL, SAVE, etc. later
+	case "EXPIRE": // NEW
+		if len(args) != 2 {
+			return nil, fmt.Errorf("ERR wrong number of arguments for 'EXPIRE' (expected 2, got %d)", len(args))
+		}
+		// Parse seconds
+		seconds, err := strconv.ParseInt(string(args[1]), 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("ERR value is not an integer or out of range")
+		}
+		ok := d.store.Expire(string(args[0]), seconds)
+		return ok, nil
+
+	case "TTL": // NEW
+		if len(args) != 1 {
+			return nil, fmt.Errorf("ERR wrong number of arguments for 'TTL' (expected 1, got %d)", len(args))
+		}
+		ttl := d.store.TTL(string(args[0]))
+		return ttl, nil
+
 	case "SUBSCRIBE", "PUBLISH":
 		// TODO: Route to pubsub broker (Phase 4)
 		return nil, fmt.Errorf("ERR pubsub commands not yet implemented")
+
+	case "INFO":
+		// TODO: Return runtime info (Phase 5)
+		return nil, fmt.Errorf("ERR INFO command not yet implemented")
 
 	default:
 		// Verbose unknown command error – lists all supported commands

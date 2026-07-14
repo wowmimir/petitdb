@@ -12,6 +12,7 @@ import (
 	"github.com/wowmimir/petitdb/internal/config"
 	"github.com/wowmimir/petitdb/internal/dispatcher"
 	"github.com/wowmimir/petitdb/internal/protocol/resp"
+	"github.com/wowmimir/petitdb/internal/storage"
 	
 )
 
@@ -27,9 +28,13 @@ type Server struct {
 	cancel context.CancelFunc
 
 	dispatcher *dispatcher.Dispatcher
+
+	store *storage.Store
+
+	cleanupWg sync.WaitGroup
 }
 
-func NewServer(cfg *config.Config, disp *dispatcher.Dispatcher) *Server {
+func NewServer(cfg *config.Config, disp *dispatcher.Dispatcher, store *storage.Store) *Server {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Server{
@@ -37,6 +42,7 @@ func NewServer(cfg *config.Config, disp *dispatcher.Dispatcher) *Server {
 		ctx:    ctx,
 		cancel: cancel,
 		dispatcher : disp,
+		store : store,
 
 	}
 }
@@ -56,6 +62,9 @@ func (s *Server) Start() error {
 	log.Printf("PetitDB listening on %s", addr)
 	log.Printf("Data directory: %s", s.cfg.Dir)
 
+	s.cleanupWg.Add(1)
+	go s.cleanupLoop()
+
 	for {
 		conn, err := s.listener.Accept()
 
@@ -73,6 +82,28 @@ func (s *Server) Start() error {
 
 		s.wg.Add(1)
 		go s.handleConn(conn)
+	}
+}
+
+func (s *Server) cleanupLoop() {
+	defer s.cleanupWg.Done()
+
+	ticker := time.NewTicker(1 * time.Second) // Cleanup every second
+	defer ticker.Stop()
+
+	log.Println("Expiration cleanup started (interval: 1s)")
+
+	for {
+		select {
+		case <-s.ctx.Done():
+			log.Println("Expiration cleanup stopping")
+			return
+		case <-ticker.C:
+			deleted := s.store.DeleteExpired()
+			if deleted > 0 {
+				log.Printf("Cleanup: removed %d expired keys", deleted)
+			}
+		}
 	}
 }
 
