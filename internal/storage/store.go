@@ -26,7 +26,7 @@ type StorageEntry struct {
 func (s *Store) SetRaw(key string, value []byte, expiresAt int64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	
+
 	val := Value{
 		Data:      make([]byte, len(value)),
 		ExpiresAt: expiresAt,
@@ -39,7 +39,7 @@ func (s *Store) SetRaw(key string, value []byte, expiresAt int64) {
 func (s *Store) GetAll() []StorageEntry {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	entries := make([]StorageEntry, 0, len(s.data))
 	for key, val := range s.data {
 		// Skip expired keys (they should already be cleaned up, but just in case)
@@ -61,8 +61,8 @@ func NewStore() *Store {
 	}
 }
 
-func (v Value) isExpired() bool{
-	if v.ExpiresAt == 0{
+func (v Value) isExpired() bool {
+	if v.ExpiresAt == 0 {
 		return false
 	}
 
@@ -87,20 +87,20 @@ func (s *Store) Set(key string, val []byte) {
 
 // SetWithExpiration stores a value with a TTL (in seconds)
 func (s *Store) SetWithExpiration(key string, val []byte, ttlSeconds int64) {
-    s.mu.Lock()
-    defer s.mu.Unlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-    var expiresAt int64 = 0
-    if ttlSeconds > 0 {
-        expiresAt = time.Now().Add(time.Duration(ttlSeconds) * time.Second).UnixNano()
-    }
+	var expiresAt int64 = 0
+	if ttlSeconds > 0 {
+		expiresAt = time.Now().Add(time.Duration(ttlSeconds) * time.Second).UnixNano()
+	}
 
-    value := Value{
-        Data:      make([]byte, len(val)),
-        ExpiresAt: expiresAt,
-    }
-    copy(value.Data, val)
-    s.data[key] = value
+	value := Value{
+		Data:      make([]byte, len(val)),
+		ExpiresAt: expiresAt,
+	}
+	copy(value.Data, val)
+	s.data[key] = value
 }
 
 func (s *Store) Get(key string) ([]byte, bool) {
@@ -114,9 +114,9 @@ func (s *Store) Get(key string) ([]byte, bool) {
 		return nil, false
 	}
 
-	if val.isExpired(){
-		delete(s.data,key)
-		return nil,false
+	if val.isExpired() {
+		delete(s.data, key)
+		return nil, false
 	}
 
 	result := make([]byte, len(val.Data))
@@ -151,68 +151,68 @@ func (s *Store) Exists(key string) bool {
 	return exists
 }
 
-func (s *Store) Expire(key string, ttlSeconds int64) bool{
+func (s *Store) Expire(key string, ttlSeconds int64) bool {
 	s.mu.Lock()
 
 	defer s.mu.Unlock()
 
-	val,exists := s.data[key]
+	val, exists := s.data[key]
 
-	if !exists{
-		return false 
-	}
-
-	if val.isExpired(){
-		delete(s.data,key)
+	if !exists {
 		return false
 	}
-	if ttlSeconds>0{
+
+	if val.isExpired() {
+		delete(s.data, key)
+		return false
+	}
+	if ttlSeconds > 0 {
 		val.ExpiresAt = time.Now().UnixNano() + ttlSeconds*1e9
-	} else{
+	} else {
 		val.ExpiresAt = 0
 	}
-	s.data[key]  = val
+	s.data[key] = val
 
 	return true
 
 }
 
-func (s *Store) TTL(key string) int64{
+func (s *Store) TTL(key string) int64 {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	val,exists := s.data[key]
-	if !exists{
+	val, exists := s.data[key]
+	if !exists {
 		return -2
 	}
-	if val.isExpired(){
+	if val.isExpired() {
 		return -2
 	}
 
-	if val.ExpiresAt == 0{
+	if val.ExpiresAt == 0 {
 		return -1
 	}
 
-	now := time.Now().UnixNano()	
+	now := time.Now().UnixNano()
 
 	remaining := val.ExpiresAt - now
 
-	if remaining <=0 {
+	if remaining <= 0 {
 		return -2
 	}
 
-	return remaining/1e9
+	return remaining / 1e9
 }
 
-func (s *Store) DeleteExpired() int{
+func (s *Store) DeleteExpired() int {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	count := 0
 
-	for key,val := range(s.data){
-		if val.isExpired(){
-			delete(s.data,key)
+	for key, val := range s.data {
+		if val.isExpired() {
+			delete(s.data, key)
 			count++
 		}
 	}

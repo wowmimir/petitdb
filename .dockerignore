@@ -1,0 +1,39 @@
+# Git
+.git/
+.gitignore
+
+# Build artifacts
+petitdb
+petitdb.exe
+*.test
+
+# Snapshots (avoid baking local state)
+snapshot
+snapshot.tmp
+snapshot.corrupt.*
+
+# Data directory (local volume)
+data/
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Documentation (not needed in the image)
+README.md
+*.md
+docs/
+
+# Test outputs
+coverage.out
+*.log
+
+# CI/CD files (not needed for build)
+.github/
+.gitlab/

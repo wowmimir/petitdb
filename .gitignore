@@ -1,105 +1,45 @@
-# Binaries and build outputs
-/bin/
-/dist/
-/petitdb
-*.exe
-*.exe~
-*.dll
-*.so
-*.dylib
-
-# Test binaries
+# Build artifacts
+petitdb
+petitdb.exe
 *.test
 *.out
+*.log
 
-# Go workspace files
-go.work
-go.work.sum
+# Temporary snapshot files
+snapshot
+snapshot.tmp
+snapshot.corrupt.*
 
-# Dependency files (though we have none, keep it clean)
-vendor/
+# Data directory (user data)
+data/
 
-# IDE and editor files
+# Go module files (but keep go.mod and go.sum!)
+# Note: go.sum should be committed if it exists
+# go.sum is NOT here - it should be committed!
+
+# IDE
 .idea/
 .vscode/
 *.swp
 *.swo
 *~
-.DS_Store
 
-# Environment and OS files
-.env
-.env.local
-.env.*.local
+# OS
+.DS_Store
 Thumbs.db
 ehthumbs.db
 Desktop.ini
 
-# Data directory (this is crucial!)
-/data/
-/snapshot*
-*.tmp
-*.corrupt.*
-
-# Logs
-*.log
-logs/
-
-# Coverage reports
-*.cover
-*.coverprofile
+# Coverage
 coverage.out
 coverage.html
 
-# Build tools
-Makefile
-*.mk
-
-# Docker
-*.tar
-*.tar.gz
-
-# Temporary files
-tmp/
-temp/
-*.temp
-
-# Profiling data
+# Profiling
 *.prof
 *.cpu
 *.mem
 
-# Debug files
+# Debug
 debug
-__debug_bin
-
-# Go module checksum
-go.sum
-
-# Local development overrides
-.local/
-*.local.yaml
-*.local.yml
-
-# Backup files
-*.bak
-*.backup
-*.old
-
-# Archives
-*.zip
-*.tar.gz
-*.tgz
-*.rar
-*.7z
-
-# Air (hot reload)
-tmp/
-
-# Delve (debugger)
-.debug/
-
-# Task (task runner)
-.task/
 
 context/

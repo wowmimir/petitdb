@@ -119,7 +119,7 @@ func (b *Broker) SubscriberCount() int {
 func (b *Broker) SubscriberCountForTopic(topic string) int {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
-	
+
 	subscribers, exists := b.topics[topic]
 	if !exists {
 		return 0

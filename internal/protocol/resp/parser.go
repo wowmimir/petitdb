@@ -3,9 +3,9 @@ package resp
 import (
 	"bufio"
 	"bytes"
+	"fmt"
 	"strconv"
 	"strings"
-	"fmt"
 )
 
 // ParseCommand reads a RESP array from the reader and returns (command, args, error).

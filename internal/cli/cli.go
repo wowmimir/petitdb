@@ -6,17 +6,17 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strconv"
 	"strings"
 	"time"
-	"strconv"
 
 	"github.com/wowmimir/petitdb/internal/protocol/resp"
 )
 
 const (
-	maxHistory            = 1000
-	maxReconnectAttempts  = 5
-	reconnectBaseDelay    = 1 * time.Second
+	maxHistory           = 1000
+	maxReconnectAttempts = 5
+	reconnectBaseDelay   = 1 * time.Second
 )
 
 // Run starts the CLI REPL connecting to the given host and port.

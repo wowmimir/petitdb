@@ -47,7 +47,7 @@ func (sm *SnapshotManager) tempPath() string {
 // If snapshot is corrupt, it logs ASCII art warnings, renames the file, and returns an empty store
 func (sm *SnapshotManager) Load() (*storage.Store, bool, error) {
 	snapshotPath := sm.snapshotPath()
-	
+
 	// Check if snapshot exists
 	if _, err := os.Stat(snapshotPath); os.IsNotExist(err) {
 		log.Println("No snapshot found, starting with empty state")
@@ -74,9 +74,6 @@ func (sm *SnapshotManager) loadSnapshot(path string) (*storage.Store, error) {
 		return nil, fmt.Errorf("failed to open snapshot: %w", err)
 	}
 	defer file.Close()
-
-
-	
 
 	store := storage.NewStore()
 	scanner := bufio.NewScanner(file)
@@ -175,7 +172,7 @@ func (sm *SnapshotManager) Save(store *storage.Store) error {
 func (sm *SnapshotManager) writeSnapshot(path string, store *storage.Store) error {
 	// Get all key-value pairs from the store
 	entries := store.GetAll()
-	
+
 	// Create file
 	file, err := os.Create(path)
 	if err != nil {
@@ -190,10 +187,10 @@ func (sm *SnapshotManager) writeSnapshot(path string, store *storage.Store) erro
 	for _, entry := range entries {
 		// Encode value as base64 to avoid issues with newlines and special characters
 		encodedValue := base64.StdEncoding.EncodeToString(entry.Value)
-		
+
 		// Format: key|base64(value)|expires_at
 		line := fmt.Sprintf("%s|%s|%d\n", entry.Key, encodedValue, entry.ExpiresAt)
-		
+
 		if _, err := writer.WriteString(line); err != nil {
 			return fmt.Errorf("failed to write entry: %w", err)
 		}
