@@ -44,7 +44,7 @@ PetitDB is a simple TCP state server for session storage, API caching, counters,
 
 ```bash
 # Install
-go install github.com/wowmimir/petitdb@latest
+go install github.com/wowmimir/petitdb/cmd/petitdb@latest
 
 # Start the server (defaults: 127.0.0.1:9379, ./data)
 petitdb

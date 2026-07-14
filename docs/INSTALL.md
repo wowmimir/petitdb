@@ -1,16 +1,67 @@
 # Installation
 
-PetitDB is distributed as a single Go binary with no external dependencies. Choose the method that suits your environment.
+PetitDB is a single binary with no dependencies. You can use it immediately after downloading – no installation required unless you want it in your `PATH`.
 
 ---
 
 ## Quick Links
 
-- [Go Install](#go-install)
-- [Pre‑built Binaries](#prebuilt-binaries)
-- [Docker](#docker)
+- [Download a Pre‑built Binary](#prebuilt-binaries)
+- [Install via Go](#go-install)
+- [Use Docker](#docker)
 - [Build from Source](#build-from-source)
 - [Verify Installation](#verify-installation)
+
+---
+
+## Pre‑built Binaries
+
+### Quick Start (Run Without Installing)
+
+**Linux/macOS:**
+```bash
+curl -LO https://github.com/wowmimir/petitdb/releases/latest/download/petitdb-linux-amd64
+chmod +x petitdb-linux-amd64
+./petitdb-linux-amd64
+```
+
+**Windows (PowerShell):**
+```powershell
+Invoke-WebRequest -Uri https://github.com/wowmimir/petitdb/releases/latest/download/petitdb-windows-amd64.exe -OutFile petitdb.exe
+.\petitdb.exe
+```
+
+### Make It Globally Available (Optional)
+
+To run `petitdb` from anywhere without `./`:
+
+**Linux/macOS:**
+```bash
+# Move to a directory in your PATH (e.g., /usr/local/bin)
+sudo mv petitdb-linux-amd64 /usr/local/bin/petitdb
+
+# Or add the current directory to PATH (temporary)
+export PATH=$PATH:$(pwd)
+
+# Or add to PATH permanently (add to ~/.bashrc or ~/.zshrc)
+echo 'export PATH=$PATH:/path/to/petitdb' >> ~/.bashrc
+```
+
+**Windows:**
+1. Move `petitdb.exe` to a folder like `C:\Program Files\PetitDB\`
+2. Add that folder to your system PATH:
+   - Open System Properties → Environment Variables
+   - Add `C:\Program Files\PetitDB` to `Path`
+
+### Platform-Specific Downloads
+
+| Platform | Architecture | Download |
+|----------|--------------|----------|
+| Linux | amd64 | `petitdb-linux-amd64` |
+| Linux | arm64 | `petitdb-linux-arm64` |
+| macOS | amd64 (Intel) | `petitdb-darwin-amd64` |
+| macOS | arm64 (Apple Silicon) | `petitdb-darwin-arm64` |
+| Windows | amd64 | `petitdb-windows-amd64.exe` |
 
 ---
 
@@ -19,51 +70,19 @@ PetitDB is distributed as a single Go binary with no external dependencies. Choo
 If you have Go 1.26.5+ installed:
 
 ```bash
-go install github.com/wowmimir/petitdb@latest
+go install github.com/wowmimir/petitdb/cmd/petitdb@latest
 ```
 
-The binary will be placed in `$GOPATH/bin` (or `~/go/bin`). Ensure this directory is in your `PATH`.
+This places the binary in `$GOPATH/bin` (or `~/go/bin`). **This directory is usually in your PATH** – so you can run `petitdb` immediately.
 
----
-
-## Pre‑built Binaries
-
-Download the latest binary for your platform from the [GitHub Releases](https://github.com/wowmimir/petitdb/releases) page.
-
-### Linux (amd64)
+If it's not in your PATH, add it:
 ```bash
-curl -LO https://github.com/wowmimir/petitdb/releases/latest/download/petitdb-linux-amd64
-chmod +x petitdb-linux-amd64
-sudo mv petitdb-linux-amd64 /usr/local/bin/petitdb
-```
+# Linux/macOS
+export PATH=$PATH:$(go env GOPATH)/bin
 
-### Linux (arm64)
-```bash
-curl -LO https://github.com/wowmimir/petitdb/releases/latest/download/petitdb-linux-arm64
-chmod +x petitdb-linux-arm64
-sudo mv petitdb-linux-arm64 /usr/local/bin/petitdb
+# Windows (PowerShell)
+$env:Path += ";$(go env GOPATH)\bin"
 ```
-
-### macOS (amd64 / Intel)
-```bash
-curl -LO https://github.com/wowmimir/petitdb/releases/latest/download/petitdb-darwin-amd64
-chmod +x petitdb-darwin-amd64
-sudo mv petitdb-darwin-amd64 /usr/local/bin/petitdb
-```
-
-### macOS (arm64 / Apple Silicon)
-```bash
-curl -LO https://github.com/wowmimir/petitdb/releases/latest/download/petitdb-darwin-arm64
-chmod +x petitdb-darwin-arm64
-sudo mv petitdb-darwin-arm64 /usr/local/bin/petitdb
-```
-
-### Windows (amd64)
-```powershell
-Invoke-WebRequest -Uri https://github.com/wowmimir/petitdb/releases/latest/download/petitdb-windows-amd64.exe -OutFile petitdb.exe
-```
-
-Move the executable to a directory in your `PATH` (e.g., `C:\Program Files\PetitDB`).
 
 ---
 
@@ -79,7 +98,7 @@ docker pull wowmimir/petitdb:latest
 docker run -p 9379:9379 -v petitdb_data:/data wowmimir/petitdb:latest
 ```
 
-For detailed Docker configuration, see [Docker section in README](../README.md#docker).
+No `PATH` needed – Docker handles everything.
 
 ---
 
@@ -89,62 +108,75 @@ For detailed Docker configuration, see [Docker section in README](../README.md#d
 - Go 1.26.5+
 - (Optional) `make` or `build.ps1` for convenience.
 
-### Clone the repository
+### Clone and Build
 ```bash
 git clone https://github.com/wowmimir/petitdb.git
 cd petitdb
-```
 
-### Build
-
-**Using Make (Linux/macOS):**
-```bash
+# Using Make (Linux/macOS)
 make build
-```
 
-**Using PowerShell (Windows):**
-```powershell
+# Using PowerShell (Windows)
 .\build.ps1 build
-```
 
-**Direct Go build:**
-```bash
+# Direct Go build
+# Linux/macOS
 go build -o petitdb ./cmd/petitdb
+# Windows
+go build -o petitdb.exe ./cmd/petitdb
 ```
 
-The binary will be placed in the current directory.
+The binary is now in your current directory. Run it with `./petitdb` (or `.\petitdb.exe` on Windows).
 
 ---
 
 ## Verify Installation
 
-Check the version:
-```bash
-petitdb --version
-```
+### Quick Test (Run Without Installing)
 
-Start the server in the background:
+**Linux/macOS:**
 ```bash
-petitdb &
-```
-
-Connect with the built‑in CLI:
-```bash
-petitdb cli
+./petitdb --version
+./petitdb &
+./petitdb cli
 petitdb> PING
 (string) "PONG"
 ```
 
-If you see `PONG`, installation is successful.
+**Windows:**
+```powershell
+.\petitdb.exe --version
+Start-Process .\petitdb.exe
+.\petitdb.exe cli
+petitdb> PING
+(string) "PONG"
+```
+
+### If Installed Globally (in PATH)
+
+```bash
+petitdb --version
+petitdb &
+petitdb cli
+petitdb> PING
+```
 
 ---
 
 ## Uninstalling
 
-- **Go install:** Delete the binary from `$GOPATH/bin`.
-- **Pre‑built:** Remove the file from your `PATH`.
-- **Docker:** `docker rmi wowmimir/petitdb:latest` and remove volumes.
-- **Source:** Delete the cloned repository and the built binary.
+- **Binary:** Delete the file.
+- **Go install:** `rm $(go env GOPATH)/bin/petitdb`
+- **Docker:** `docker rmi wowmimir/petitdb:latest`
+
 ---
 
+## Summary
 
+| Method | Global? | PATH Required? |
+|--------|---------|----------------|
+| Go install | ✅ Yes (if `$GOPATH/bin` in PATH) | No, usually already in PATH |
+| Download + `./` | ❌ No | No |
+| Download + move to `/usr/local/bin` | ✅ Yes | Yes (but it's already there) |
+| Docker | ❌ No (container-only) | No |
+---
