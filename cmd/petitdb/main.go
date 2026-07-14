@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -16,7 +17,19 @@ import (
 	"github.com/wowmimir/petitdb/internal/storage"
 )
 
+// Version is set at build time via -ldflags
+var Version = "dev"
+
 func main() {
+	// Check for version flag (before anything else)
+	if len(os.Args) >= 2 {
+		arg := os.Args[1]
+		if arg == "--version" || arg == "-v" {
+			fmt.Printf("petitdb version %s\n", Version)
+			os.Exit(0)
+		}
+	}
+
 	// Check for CLI subcommand
 	if len(os.Args) >= 2 && os.Args[1] == "cli" {
 		cliFlags := flag.NewFlagSet("cli", flag.ExitOnError)
