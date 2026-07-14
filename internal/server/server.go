@@ -8,6 +8,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/wowmimir/petitdb/internal/config"
@@ -19,16 +20,18 @@ import (
 )
 
 type Server struct {
-	cfg        *config.Config
-	listener   net.Listener
-	wg         sync.WaitGroup
-	ctx        context.Context
-	cancel     context.CancelFunc
-	dispatcher *dispatcher.Dispatcher
-	store      *storage.Store
-	cleanupWg  sync.WaitGroup
-	pm         *persistence.SnapshotManager
-	broker     *pubsub.Broker
+	cfg           *config.Config
+	listener      net.Listener
+	wg            sync.WaitGroup
+	ctx           context.Context
+	cancel        context.CancelFunc
+	dispatcher    *dispatcher.Dispatcher
+	store         *storage.Store
+	cleanupWg     sync.WaitGroup
+	pm            *persistence.SnapshotManager
+	broker        *pubsub.Broker
+	startTime     time.Time
+	activeClients int32
 }
 
 func NewServer(cfg *config.Config, disp *dispatcher.Dispatcher, store *storage.Store, broker *pubsub.Broker) *Server {
@@ -53,6 +56,7 @@ func (s *Server) Start() error {
 		return fmt.Errorf("failed to bind to %s: %w", addr, err)
 	}
 	s.listener = listener
+	s.startTime = time.Now()
 
 	log.Printf("PetitDB listening on %s", addr)
 	log.Printf("Data directory: %s", s.cfg.Dir)
@@ -102,9 +106,26 @@ func (s *Server) cleanupLoop() {
 	}
 }
 
+// UptimeSeconds returns the number of seconds since the server started.
+func (s *Server) UptimeSeconds() int64 {
+	if s.startTime.IsZero() {
+		return 0
+	}
+	return int64(time.Since(s.startTime).Seconds())
+}
+
+// ClientCount returns the number of currently connected clients.
+func (s *Server) ClientCount() int32 {
+	return atomic.LoadInt32(&s.activeClients)
+}
+
 func (s *Server) handleConn(conn net.Conn) {
 	defer s.wg.Done()
 	defer conn.Close()
+
+	// Track active clients
+	atomic.AddInt32(&s.activeClients, 1)
+	defer atomic.AddInt32(&s.activeClients, -1)
 
 	addr := conn.RemoteAddr()
 	log.Printf("Client connected: %s", addr)

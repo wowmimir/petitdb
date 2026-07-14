@@ -50,3 +50,17 @@ func SerializeArray(elements []interface{}) string {
 	}
 	return result
 }
+
+// SerializeCommand builds a RESP array of bulk strings from a command and its arguments.
+// Example: SerializeCommand([]string{"SET", "key", "value"}) returns "*3\r\n$3\r\nSET\r\n$3\r\nkey\r\n$5\r\nvalue\r\n"
+func SerializeCommand(args []string) []byte {
+	if len(args) == 0 {
+		return []byte("*0\r\n")
+	}
+	// Build the array header
+	result := fmt.Sprintf("*%d\r\n", len(args))
+	for _, arg := range args {
+		result += fmt.Sprintf("$%d\r\n%s\r\n", len(arg), arg)
+	}
+	return []byte(result)
+}

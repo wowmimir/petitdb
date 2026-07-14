@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync/atomic"
 
 	apperrors "github.com/wowmimir/petitdb/internal/errors"
 	"github.com/wowmimir/petitdb/internal/protocol/resp"
@@ -17,11 +18,19 @@ var SupportedCommands = []string{
 	"EXPIRE", "TTL", "SAVE", "SUBSCRIBE", "PUBLISH", "INFO",
 }
 
+// StatsProvider provides runtime statistics for the INFO command.
+type StatsProvider interface {
+	UptimeSeconds() int64
+	ClientCount() int32
+}
+
 // Dispatcher routes commands to the appropriate subsystem.
 type Dispatcher struct {
-	store    *storage.Store
-	pubsub   *pubsub.Broker
-	saveFunc func() error
+	store          *storage.Store
+	pubsub         *pubsub.Broker
+	saveFunc       func() error
+	commandCounter int64
+	statsProvider  StatsProvider
 }
 
 func NewDispatcher(store *storage.Store, pb *pubsub.Broker, saveFunc func() error) *Dispatcher {
@@ -32,9 +41,22 @@ func NewDispatcher(store *storage.Store, pb *pubsub.Broker, saveFunc func() erro
 	}
 }
 
+// SetStatsProvider injects the StatsProvider (typically the Server) after creation.
+func (d *Dispatcher) SetStatsProvider(provider StatsProvider) {
+	d.statsProvider = provider
+}
+
+// CommandCount returns the total number of commands processed.
+func (d *Dispatcher) CommandCount() int64 {
+	return atomic.LoadInt64(&d.commandCounter)
+}
+
 // Dispatch processes a command and returns a result or an error.
 // The clientCh parameter is used for SUBSCRIBE commands.
 func (d *Dispatcher) Dispatch(cmd string, args [][]byte, clientCh chan []byte) (interface{}, error) {
+	// Increment command counter for every parsed command
+	atomic.AddInt64(&d.commandCounter, 1)
+
 	// Input validation for key (if there is at least one argument)
 	if len(args) > 0 {
 		key := string(args[0])
@@ -157,8 +179,7 @@ func (d *Dispatcher) Dispatch(cmd string, args [][]byte, clientCh chan []byte) (
 		return "OK", nil
 
 	case "INFO":
-		// TODO: Phase 5
-		return nil, fmt.Errorf("ERR INFO command not yet implemented")
+		return d.handleInfo()
 
 	default:
 		return nil, fmt.Errorf(
@@ -167,4 +188,22 @@ func (d *Dispatcher) Dispatch(cmd string, args [][]byte, clientCh chan []byte) (
 			strings.Join(SupportedCommands, ", "),
 		)
 	}
+}
+
+// handleInfo collects and formats runtime statistics.
+func (d *Dispatcher) handleInfo() (interface{}, error) {
+	if d.statsProvider == nil {
+		return nil, fmt.Errorf("ERR stats provider not available")
+	}
+
+	uptime := d.statsProvider.UptimeSeconds()
+	clients := d.statsProvider.ClientCount()
+	keys := d.store.Size()
+	commands := d.CommandCount()
+
+	// Return as []byte to get RESP bulk string (supports newlines)
+	return []byte(fmt.Sprintf(
+		"# Server\nuptime_seconds: %d\nconnected_clients: %d\ntotal_keys: %d\ncommands_processed: %d\n",
+		uptime, clients, keys, commands,
+	)), nil
 }
