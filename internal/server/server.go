@@ -1,19 +1,19 @@
 package server
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"log"
 	"net"
 	"sync"
 	"time"
-	"bufio"
 
 	"github.com/wowmimir/petitdb/internal/config"
 	"github.com/wowmimir/petitdb/internal/dispatcher"
+	"github.com/wowmimir/petitdb/internal/persistence"
 	"github.com/wowmimir/petitdb/internal/protocol/resp"
 	"github.com/wowmimir/petitdb/internal/storage"
-	
 )
 
 type Server struct {
@@ -32,18 +32,36 @@ type Server struct {
 	store *storage.Store
 
 	cleanupWg sync.WaitGroup
+	
+	pm *persistence.SnapshotManager
 }
 
 func NewServer(cfg *config.Config, disp *dispatcher.Dispatcher, store *storage.Store) *Server {
 
 	ctx, cancel := context.WithCancel(context.Background())
-	return &Server{
-		cfg:    cfg,
-		ctx:    ctx,
-		cancel: cancel,
-		dispatcher : disp,
-		store : store,
 
+	pm := persistence.NewSnapshotManager(cfg.Dir)
+
+	loadedStore, wasLoaded, err := pm.Load()
+
+	if err != nil {
+		// This should not happen because Load handles corruption and never returns error
+		// But just in case, log and continue
+		log.Printf("Warning: unexpected error loading snapshot: %v", err)
+	}
+
+	// If we loaded a store from snapshot, we should use it instead of the empty one
+	if wasLoaded {
+		store = loadedStore
+	}
+
+	return &Server{
+		cfg:        cfg,
+		ctx:        ctx,
+		cancel:     cancel,
+		dispatcher: disp,
+		store:      store,
+		pm:         pm, // NEW: store persistence manager
 	}
 }
 
@@ -112,6 +130,9 @@ func (s *Server) handleConn(conn net.Conn) {
 	defer conn.Close()
 
 	log.Printf("Client connected: %s", conn.RemoteAddr())
+
+	defer log.Printf("Client disconnected: %s", conn.RemoteAddr()) // <-- new
+	
 	reader := bufio.NewReader(conn)
 
 	for {

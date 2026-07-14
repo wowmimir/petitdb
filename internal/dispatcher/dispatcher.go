@@ -18,10 +18,14 @@ var SupportedCommands = []string{
 // Dispatcher routes commands to the storage engine.
 type Dispatcher struct {
 	store *storage.Store
+	saveFunc   func() error // NEW: callback to trigger snapshot save
 }
 
-func NewDispatcher(store *storage.Store) *Dispatcher {
-	return &Dispatcher{store: store}
+func NewDispatcher(store *storage.Store, saveFunc func() error) *Dispatcher {
+	return &Dispatcher{
+		store:    store,
+		saveFunc: saveFunc,
+	}
 }
 
 // Dispatch processes a command and returns a result or an error.
@@ -98,6 +102,14 @@ func (d *Dispatcher) Dispatch(cmd string, args [][]byte) (interface{}, error) {
 	case "INFO":
 		// TODO: Return runtime info (Phase 5)
 		return nil, fmt.Errorf("ERR INFO command not yet implemented")
+	case "SAVE":
+		if len(args) != 0 {
+			return nil, fmt.Errorf("ERR wrong number of arguments for 'SAVE' (expected 0, got %d)", len(args))
+		}
+		if err := d.saveFunc(); err != nil {
+			return nil, fmt.Errorf("ERR failed to save snapshot: %v", err)
+		}
+		return "OK", nil
 
 	default:
 		// Verbose unknown command error – lists all supported commands

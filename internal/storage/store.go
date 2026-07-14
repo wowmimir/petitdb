@@ -15,6 +15,46 @@ type Store struct {
 	data map[string]Value
 }
 
+// StorageEntry represents a key-value pair with expiration for snapshot purposes
+type StorageEntry struct {
+	Key       string
+	Value     []byte
+	ExpiresAt int64
+}
+
+// SetRaw bypasses expiration checks and directly inserts a value (used for loading snapshots)
+func (s *Store) SetRaw(key string, value []byte, expiresAt int64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	
+	val := Value{
+		Data:      make([]byte, len(value)),
+		ExpiresAt: expiresAt,
+	}
+	copy(val.Data, value)
+	s.data[key] = val
+}
+
+// GetAll returns all key-value pairs with expiration (used for saving snapshots)
+func (s *Store) GetAll() []StorageEntry {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	
+	entries := make([]StorageEntry, 0, len(s.data))
+	for key, val := range s.data {
+		// Skip expired keys (they should already be cleaned up, but just in case)
+		if val.isExpired() {
+			continue
+		}
+		entries = append(entries, StorageEntry{
+			Key:       key,
+			Value:     val.Data,
+			ExpiresAt: val.ExpiresAt,
+		})
+	}
+	return entries
+}
+
 func NewStore() *Store {
 	return &Store{
 		data: make(map[string]Value),
